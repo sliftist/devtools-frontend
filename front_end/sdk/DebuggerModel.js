@@ -39,6 +39,14 @@ import {Capability, SDKModel, Target, Type} from './SDKModel.js';  // eslint-dis
 import {WasmSourceMap} from './SourceMap.js';
 import {SourceMapManager} from './SourceMapManager.js';
 
+
+
+function isWasm(url) {
+  return url.startsWith("wasm://") || url.startsWith("wasm-");
+}
+
+
+
 /**
  * @unrestricted
  */
@@ -1094,6 +1102,11 @@ class DebuggerDispatcher {
   scriptParsed(
       scriptId, sourceURL, startLine, startColumn, endLine, endColumn, executionContextId, hash,
       executionContextAuxData, isLiveEdit, sourceMapURL, hasSourceURL, isModule, length, stackTrace) {
+
+    if(isWasm(sourceURL)) {
+      window.patchingForWasmSupport = true;
+    }
+
     this._debuggerModel._parsedScriptSource(
         scriptId, sourceURL, startLine, startColumn, endLine, endColumn, executionContextId, hash,
         executionContextAuxData, !!isLiveEdit, sourceMapURL, !!hasSourceURL, false, length || 0, stackTrace || null);

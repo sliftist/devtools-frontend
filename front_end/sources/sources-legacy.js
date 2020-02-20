@@ -141,6 +141,8 @@ Sources.SourceScopeChainSidebarPane = SourcesModule.ScopeChainSidebarPane.Source
 
 Sources.SourceScopeChainSidebarPane._pathSymbol = SourcesModule.ScopeChainSidebarPane.pathSymbol;
 
+Sources.WasmTools = SourcesModule.ScopeChainSidebarPane.WasmTools;
+
 /** @constructor */
 Sources.ScopeChainSidebarPane = SourcesModule.ScopeChainSidebarPane.ScopeChainSidebarPane;
 

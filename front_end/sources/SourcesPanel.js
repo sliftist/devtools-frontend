@@ -24,6 +24,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+
 import * as Bindings from '../bindings/bindings.js';
 import * as Common from '../common/common.js';
 import * as Extensions from '../extensions/extensions.js';
@@ -958,7 +959,11 @@ export class SourcesPanel extends UI.Panel.Panel {
       this._sidebarPaneStack.appendView(this._watchSidebarPane);
     }
 
+    const wasmTools = /** @type {!UI.View} */ (self.UI.viewManager.view('sources.wasmTools'));
+    this._sidebarPaneStack.showView(wasmTools);
+
     this._sidebarPaneStack.showView(this._callstackPane);
+    
     const jsBreakpoints = /** @type {!UI.View.View} */ (self.UI.viewManager.view('sources.jsBreakpoints'));
     const sourceScopeChainView = /** @type {?UI.View.View} */
         (Root.Runtime.experiments.isEnabled('wasmDWARFDebugging') ?
