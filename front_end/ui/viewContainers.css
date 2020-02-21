@@ -53,6 +53,56 @@
     display: none;
 }
 
+/** We modify the the title in a bad way */
+.wasm-title-state {
+    font-style: italic;
+    opacity: 0.55;
+}
+.wasm-title-state-old, .wasm-title-state-aligner {
+    flex-grow: 1;
+    flex-basis: 0px;
+}
+
+
+.wasm-title-state--type-message { }
+
+.wasm-title-state--type-info, .wasm-title-state--type-warn, .wasm-title-state--type-error, .wasm-title-state--type-success {
+    font-style: normal;
+    opacity: 1;
+}
+
+.wasm-title-state--type-info {
+    color: hsl(182, 85%, 45%);
+}
+.wasm-title-state--type-warn {
+    color: hsl(35, 75%, 50%);
+}
+.wasm-title-state--type-error {
+    color: hsl(0, 85%, 45%);
+}
+.wasm-title-state--type-success {
+    color: hsl(118, 80%, 50%);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wasm-title-state--type-info, .wasm-title-state--type-warn, .wasm-title-state--type-error, .wasm-title-state--type-success {
+        opacity: 0.8;
+    }
+    .wasm-title-state--type-info {
+        color: hsl(182, 85%, 70%);
+    }
+    .wasm-title-state--type-warn {
+        color: hsl(66, 85%, 70%);
+    }
+    .wasm-title-state--type-error {
+        color: hsl(0, 85%, 70%);
+    }
+    .wasm-title-state--type-success {
+        color: hsl(118, 85%, 70%);
+    }
+}
+
+
 .title-expand-icon {
     margin-right: 2px;
     margin-bottom: -2px;

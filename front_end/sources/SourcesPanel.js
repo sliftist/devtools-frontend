@@ -445,10 +445,37 @@ Sources.SourcesPanel = class extends UI.Panel {
    * @param {!Bindings.LiveLocation} liveLocation
    */
   _executionLineChanged(liveLocation) {
+    //*
+    function printLine(column) {
+      let wasmStack = window.wasmStack;
+      let wasm = wasmStack.slice(-1)[0];
+      if(wasmStack.length > 0) {
+        let wasmLocation = column - wasm.codeOffset;
+        let curWast = wasm.functionWasts.filter(x => x.wasmByteOffset === wasmLocation)[0];
+        let functionName = curWast.functionName;
+        let curWasts = wasm.functionWasts.filter(x => x.functionName === functionName);
+        let wastIndex = curWasts.findIndex(x => x.wasmByteOffset === wasmLocation);
+        console.log(`At wast index ${wastIndex}, ${curWast.wast}`);
+      }
+    }
+    if(liveLocation._rawLocation.lineNumber === 0) {
+      liveLocation._script.debuggerModel.runtimeModel()._agent.invoke_callFunctionOn({
+        executionContextId: liveLocation._script.executionContextId,
+        functionDeclaration: printLine.toString(),
+        arguments: [SDK.RemoteObject.toCallArgument(liveLocation._rawLocation.columnNumber)],
+        silent: false,
+        returnByValue: true,
+      }).then((result) => {
+        console.log("result", result);
+      });
+    }
+    //*/
+
     const uiLocation = liveLocation.uiLocation();
     if (!uiLocation) {
       return;
     }
+    uiLocationChanged(uiLocation, liveLocation._rawLocation);
     if (window.performance.now() - this._lastModificationTime < Sources.SourcesPanel._lastModificationTimeout) {
       return;
     }
@@ -957,6 +984,9 @@ Sources.SourcesPanel = class extends UI.Panel {
       this._sidebarPaneStack.appendView(this._watchSidebarPane);
     }
 
+    const wasmTools = /** @type {!UI.View} */ (self.UI.viewManager.view('sources.wasmTools'));
+    this._sidebarPaneStack.showView(wasmTools);
+
     this._sidebarPaneStack.showView(this._callstackPane);
     const jsBreakpoints = /** @type {!UI.View} */ (UI.viewManager.view('sources.jsBreakpoints'));
     const scopeChainView = /** @type {!UI.View} */ (UI.viewManager.view('sources.scopeChain'));
@@ -1156,6 +1186,123 @@ Sources.SourcesPanel.RevealingActionDelegate = class {
   }
 };
 
+
+let onNextUiLocation = [];
+function uiLocationChanged(uiLocation, rawLocation) {
+  console.log(`Location changed to ${rawLocation.columnNumber} (ui ${uiLocation.lineNumber})`);
+
+  let callbacks = onNextUiLocation;
+  onNextUiLocation = [];
+  for(let callback of callbacks) {
+    callback(uiLocation, rawLocation);
+  }
+}
+function onLocChanged() {
+  let callback;
+  let promise = new Promise(resolve => callback = (x, y) => resolve({ uiLocation: x, location: y }));
+  onNextUiLocation.push(callback);
+  return promise;
+}
+
+// In SourcesPanel.js and RuntimeModel.js. Copied and not imported as the bundling and import manner is changing
+//  and I don't want the future me to have to figure out how to get it working again when how we import has to change.
+// Eventually when it is stable this should be reduced to just one function in one place...
+function runCodeInTarget(executionContext, args, fnc) {
+  let executionContextId = executionContext.id;
+  return executionContext.runtimeModel._agent.invoke_callFunctionOn({
+    executionContextId,
+    functionDeclaration: fnc.toString(),
+    arguments: args,
+    silent: false,
+    returnByValue: true
+  });
+}
+
+async function runUntilLineChanges(fnc) {
+  // TODO: We should parse the wasm and identify lines that don't jump, and then set a breakpoint at the next possible jumping instruction,
+  //  at least until the dwarf debug informations says the line might change... That way we will usually only need to continue once, at most
+  //  maybe a few times, instead of having to continue for every arbitrary stack push.
+
+  let frame = UI.context.flavor(SDK.DebuggerModel.CallFrame);
+
+  let locationStart = frame.location();
+  if(locationStart.lineNumber !== 0) {
+    // If lineNumber !== 0, then we don't have the WASM byte execution location.
+    fnc();
+    return;
+  }
+  let uiLocationStart = Bindings.debuggerWorkspaceBinding._debuggerModelToData.get(locationStart.debuggerModel)._rawLocationToUILocation(locationStart);
+  let uiLocation = uiLocationStart;
+  let location = locationStart;
+  let max = 100;
+  while(max --> 0) {
+    let locObj;
+    if(frame) {
+      let executionContext = frame.script.executionContext();
+      let result = await runCodeInTarget(
+        executionContext,
+        [
+          SDK.RemoteObject.toCallArgument(location.columnNumber)
+        ], function(column) {
+
+          let wasmStack = window.wasmStack;
+          if(!wasmStack || wasmStack.length <= 0) {
+            return undefined;
+          }
+  
+          let curStack = wasmStack.slice(-1)[0];
+          let nextBranchingLine = curStack.getNextBranchingOrDifferentLine(column);
+          return nextBranchingLine;
+        }
+      );
+      if(result.result && result.result.type === "number") {
+        // Alright... now... result.result is a column number. Run until that column number. If we are already at that
+        //  column, just run until the next instruction.
+        let nextInstruction = result.result.value;
+        
+        if(nextInstruction !== location.columnNumber) {
+          // Hmm... we might need to use getPossibleBreakpoints? Or maybe... we should debug without source code, and debug from the wasm? Because...
+          //  we should DEFINITELY be able to set a breakpoint on every WASM statement, as we can without source maps...
+          let response = await executionContext.runtimeModel.debuggerModel()._agent.invoke_setBreakpointByUrl({
+            lineNumber: 0,
+            url: frame._script.sourceURL,
+            urlRegex: undefined,
+            columnNumber: nextInstruction,
+            condition: ""
+          });
+          let breakpointId = response.breakpointId;
+          console.log(`Added special breakpoint ${breakpointId}`);
+          let promise = onLocChanged();
+          await executionContext.runtimeModel.debuggerModel()._agent.resume();
+          locObj = await promise;
+          setTimeout(async () => {
+            console.log(`Removing special breakpoint ${breakpointId}`);
+            let removeResult = await executionContext.runtimeModel.debuggerModel()._agent.invoke_removeBreakpoint({breakpointId});
+            console.log({removeResult});
+          }, 500);
+          //console.log(`todonext, continue from current instruction ${location.columnNumber} until ${nextInstruction}`);
+        }
+      } else {
+        // Probably an error, or undefined if there is no info for this instruction?
+        console.log("error", result);
+      }
+    }
+    if(!locObj) {
+      let promise = onLocChanged();
+      fnc();
+      locObj = await promise;
+    }
+    uiLocation = locObj.uiLocation;
+    location = locObj.location;
+    locObj = undefined;
+    if(uiLocation.lineNumber !== uiLocationStart.lineNumber || uiLocation.columnNumber !== uiLocationStart.columnNumber) {
+      break;
+    }
+  }
+
+  console.log(`Line loop finished`);
+}
+
 /**
  * @implements {UI.ActionDelegate}
  * @unrestricted
@@ -1171,10 +1318,10 @@ Sources.SourcesPanel.DebuggingActionDelegate = class {
     const panel = Sources.SourcesPanel.instance();
     switch (actionId) {
       case 'debugger.step-over':
-        panel._stepOver();
+        runUntilLineChanges(() => panel._stepOver());
         return true;
       case 'debugger.step-into':
-        panel._stepIntoAsync();
+        runUntilLineChanges(() => panel._stepIntoAsync());
         return true;
       case 'debugger.step':
         panel._stepInto();

@@ -28,6 +28,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+function isWasmCheck(url) {
+  return url.startsWith("wasm://") || url.startsWith("wasm-");
+}
+
 /**
  * @unrestricted
  */
@@ -1071,6 +1075,11 @@ class DebuggerDispatcher {
   scriptParsed(
       scriptId, sourceURL, startLine, startColumn, endLine, endColumn, executionContextId, hash,
       executionContextAuxData, isLiveEdit, sourceMapURL, hasSourceURL, isModule, length, stackTrace) {
+
+    if(isWasmCheck(sourceURL)) {
+      window.patchingForWasmSupport = true;
+    }
+    
     this._debuggerModel._parsedScriptSource(
         scriptId, sourceURL, startLine, startColumn, endLine, endColumn, executionContextId, hash,
         executionContextAuxData, !!isLiveEdit, sourceMapURL, !!hasSourceURL, false, length || 0, stackTrace || null);

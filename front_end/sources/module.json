@@ -805,6 +805,13 @@
         },
         {
             "type": "view",
+            "id": "sources.wasmTools",
+            "title": "WASM Tools",
+            "persistence": "permanent",
+            "className": "Sources.WasmTools"
+        },
+        {
+            "type": "view",
             "id": "sources.watch",
             "title": "Watch",
             "hasToolbar": true,
@@ -838,6 +845,13 @@
                 "SDK.DebuggerModel.CallFrame"
             ],
             "className": "Sources.ScopeChainSidebarPane"
+        },
+        {
+            "type": "@UI.ContextFlavorListener",
+            "contextTypes": [
+                "SDK.DebuggerModel.CallFrame"
+            ],
+            "className": "Sources.WasmTools"
         },
         {
             "type": "action",
